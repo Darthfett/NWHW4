@@ -19,10 +19,78 @@
 #include <net/ethernet.h>
 #include <errno.h> // errno, perror()
 
+#include <time.h>
+
 #define SOURCE_ADDRESS "192.168.1.116" // This computer's IP Address
 #define DEST_ADDRESS "192.168.1.1"
 
+typedef enum {
+    TCP,
+    ARP,
+    UNKNOWN,
+} packet_t;
+
+void handle_line(char *ln) {
+    /*
+        Parse the given line for IP Addresses,
+        then send ARP requests for any new/unrecognized IP Addresses
+    */
+    char line[1024];
+    char *c = &line[0];
+    
+    strncpy(&line, ln, 1024);
+    printf("\"%s\"", line);
+    
+    // Read and ignore timestamp
+    do {
+        c++;
+    } while(!isspace(*c));
+    c++;
+    
+    // Read packet type
+    packet_t type = UNKNOWN;
+    char *d = c;
+    char pkt_str[1024];
+    do {
+        d++;
+    } while(!isspace(*d));
+    
+    int len = d-c;
+    strncpy(pkt_str, c, len);
+    
+    if (strcmp(pkt_str, "TCP") == 0) {
+        //type = TCP;
+    } else if (strcmp(pkt_str, "ARP,") == 0) {
+        //type = ARP;
+    }// else if (
+    
+    if (type == UNKNOWN) {
+        fprintf(stderr, "Unknown packet type: %s\n%s", pkt_str, ln);
+    }
+    
+    
+    // Read packet type
+    
+}
+
 int main(int argc, char **argv) {
+    time_t timer;
+    char line[1024];
+    
+    // Start timer
+    time(&timer);
+    while(1) {
+        // Read line from stdin
+        gets(&line);
+        
+        // Quit when 5 minutes have passed
+        if (difftime(timer, time(NULL)) > 60 * 5) break;
+        
+        handle_line(&line);
+        
+        // Check for new IP Addresses in stdin
+        // ...
+    }
     return 0;
 }
 
@@ -43,7 +111,7 @@ struct _arp_hdr {
 #define IP4_HDRLEN 20 // IPv4 header length
 #define ARP_HDRLEN 28 // ARP header length
 #define ARPOP_REQUEST 1 // Taken from <linux/if_arp.h>
-
+/*
 int main (int argc, char **argv)
 {
     int i, status, frame_length, sd, bytes;
@@ -218,3 +286,4 @@ int main (int argc, char **argv)
     free (src_ip);
     return (EXIT_SUCCESS);
 }
+*/
