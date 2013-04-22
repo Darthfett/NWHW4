@@ -36,7 +36,7 @@ void handle_line(char *ln) {
         then send ARP requests for any new/unrecognized IP Addresses
     */
     char line[1024];
-    strncpy(&line, ln, 1024);
+    strncpy(line, ln, 1024);
     
     packet_t type = UNKNOWN;
     char timestamp[1024];
@@ -44,12 +44,12 @@ void handle_line(char *ln) {
     char rest[1024];
     
     // partially parse string
-    if (sscanf(line, "%1023s %1023s [^\0]", &timestamp, &pkt_type, &rest) != 3) {
+    if (sscanf(line, "%1023s %1023s %1023[^\n]", timestamp, pkt_type, rest) != 3) {
         fprintf(stderr, "Unable to parse string:\n%s", ln);
         return;
     }
     
-    printf("%s | %s | %s |", &timestamp, &pkt_type, &rest);
+    printf("%s | %s | %s |", timestamp, pkt_type, rest);
     
     if (strcmp(pkt_type, "TCP") == 0) {
         //type = TCP;
@@ -71,12 +71,12 @@ int main(int argc, char **argv) {
     time(&timer);
     while(1) {
         // Read line from stdin
-        gets(&line);
+        gets(line);
         
         // Quit when 5 minutes have passed
         if (difftime(timer, time(NULL)) > 60 * 5) break;
         
-        handle_line(&line);
+        handle_line(line);
         
         // Check for new IP Addresses in stdin
         // ...
