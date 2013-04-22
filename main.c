@@ -25,9 +25,9 @@
 #define DEST_ADDRESS "192.168.1.1"
 
 typedef enum {
+    UNKNOWN,
     TCP,
     ARP,
-    UNKNOWN,
 } packet_t;
 
 void handle_line(char *ln) {
@@ -36,40 +36,30 @@ void handle_line(char *ln) {
         then send ARP requests for any new/unrecognized IP Addresses
     */
     char line[1024];
-    char *c = &line[0];
-    
     strncpy(&line, ln, 1024);
-    printf("\"%s\"", line);
     
-    // Read and ignore timestamp
-    do {
-        c++;
-    } while(!isspace(*c));
-    c++;
-    
-    // Read packet type
     packet_t type = UNKNOWN;
-    char *d = c;
-    char pkt_str[1024];
-    do {
-        d++;
-    } while(!isspace(*d));
+    char timestamp[1024];
+    char pkt_type[1024];
+    char rest[1024];
     
-    int len = d-c;
-    strncpy(pkt_str, c, len);
+    // partially parse string
+    if (sscanf(line, "%1023s %1023s [^\0]", &timestamp, &pkt_type, &rest) != 3) {
+        fprintf(stderr, "Unable to parse string:\n%s", ln);
+        return;
+    }
     
-    if (strcmp(pkt_str, "TCP") == 0) {
+    printf("%s | %s | %s |", &timestamp, &pkt_type, &rest);
+    
+    if (strcmp(pkt_type, "TCP") == 0) {
         //type = TCP;
-    } else if (strcmp(pkt_str, "ARP,") == 0) {
+    } else if (strcmp(pkt_type, "ARP,") == 0) {
         //type = ARP;
     }// else if (
     
     if (type == UNKNOWN) {
-        fprintf(stderr, "Unknown packet type: %s\n%s", pkt_str, ln);
+        fprintf(stderr, "Unknown packet type: %s\n\t%s", pkt_type, ln);
     }
-    
-    
-    // Read packet type
     
 }
 
@@ -93,7 +83,7 @@ int main(int argc, char **argv) {
     }
     return 0;
 }
-
+/*
 // Define a struct for ARP header
 typedef struct _arp_hdr arp_hdr;
 struct _arp_hdr {
@@ -111,7 +101,7 @@ struct _arp_hdr {
 #define IP4_HDRLEN 20 // IPv4 header length
 #define ARP_HDRLEN 28 // ARP header length
 #define ARPOP_REQUEST 1 // Taken from <linux/if_arp.h>
-/*
+
 int main (int argc, char **argv)
 {
     int i, status, frame_length, sd, bytes;
