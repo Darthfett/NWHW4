@@ -45,11 +45,9 @@ void handle_line(char *ln) {
     
     // partially parse string
     if (sscanf(line, "%1023s %1023s %1023[^\n]", timestamp, pkt_type, rest) != 3) {
-        fprintf(stderr, "Unable to parse string:\n%s", ln);
+        fprintf(stderr, "Unable to parse string:\n%s\n", ln);
         return;
     }
-    
-    printf("%s | %s | %s |", timestamp, pkt_type, rest);
     
     if (strcmp(pkt_type, "TCP") == 0) {
         //type = TCP;
@@ -58,7 +56,7 @@ void handle_line(char *ln) {
     }// else if (
     
     if (type == UNKNOWN) {
-        fprintf(stderr, "Unknown packet type: %s\n\t%s", pkt_type, ln);
+        fprintf(stderr, "Unknown packet type: %s\n\t%s\n", pkt_type, ln);
     }
     
 }
@@ -72,6 +70,8 @@ int main(int argc, char **argv) {
     while(1) {
         // Read line from stdin
         gets(line);
+
+        if (feof(stdin)) break;
         
         // Quit when 5 minutes have passed
         if (difftime(timer, time(NULL)) > 60 * 5) break;
