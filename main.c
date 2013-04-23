@@ -28,6 +28,7 @@ typedef enum {
     UNKNOWN,
     TCP,
     ARP,
+    IP,
 } packet_t;
 
 void handle_line(char *ln) {
@@ -50,10 +51,12 @@ void handle_line(char *ln) {
     }
     
     if (strcmp(pkt_type, "TCP") == 0) {
-        //type = TCP;
+        // type = TCP;
     } else if (strcmp(pkt_type, "ARP,") == 0) {
-        //type = ARP;
-    }// else if (
+        // type = ARP;
+    } else if (strcmp(pkt_type, "IP") == 0) {
+        // type = IP;
+    }
     
     if (type == UNKNOWN) {
         fprintf(stderr, "Unknown packet type: %s\n\t%s\n", pkt_type, ln);
