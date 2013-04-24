@@ -24,12 +24,96 @@
 #define SOURCE_ADDRESS "192.168.1.116" // This computer's IP Address
 #define DEST_ADDRESS "192.168.1.1"
 
+// Globals to temporarily store the MAC address found in an ARP Reply message
+char ARP_MAC_address[1024];
+int ARP_is_reply = 0;
+
 typedef enum {
     UNKNOWN,
     TCP,
     ARP,
     IP,
+    IP6,
 } packet_t;
+
+char** parse_TCP(char *pkt, int *count) {
+    // Don't know what these look like, just treat as error for now
+    return NULL;
+}
+
+#define ARP_PKT_COUNT 2
+char** parse_ARP(char *pkt, int *count) {
+    // Parse an ARP packet for IPs
+    int i;
+    char **IPs = (char**) malloc(sizeof(char) * ARP_PKT_COUNT);
+
+    if (strncmp(pkt, "Request", strlen("Request")) == 0) {
+        // Allocate room for 2 IPs
+        for (i = 0; i < ARP_PKT_COUNT; i++) {
+            IPs[i] = (char*) malloc(sizeof(char) * 1024);
+        }
+
+        // Try and parse the IPs
+        if (sscanf(pkt, "Request who-has %1023s tell %1023[^,]s, ", IPs[0], IPs[1]) != 2) {
+            // Format did not match?
+            fprintf(stderr, "Error parsing ARP Request packet: ");
+            for (i = 0; i < ARP_PKT_COUNT; i++) {
+                free(IPs[i]);
+            }
+            free(IPs);
+            return NULL;
+        }
+        *count = 2;
+        return IPs;
+    } else if (strncmp(pkt, "Reply", strlen("Reply")) == 0) {
+        // Allocate room for 1 IP
+        IPs[0] = (char*) malloc(sizeof(char) * 1024);
+        if (sscanf(pkt, "Reply %1023s is-at %1023[^,]s, ", IPs[0], ARP_MAC_address) != 2) {
+            // Format did not match?
+            fprintf(stderr, "Error parsing ARP Reply packet: ");
+            free(IPs[0]);
+            free(IPs);
+            return NULL;
+        }
+        ARP_is_reply = 1;
+        *count = 1;
+        return IPs;
+    }
+    fprintf(stderr, "Error parsing ARP packet: ");
+    free(IPs);
+    return NULL;
+}
+
+#define IP_PKT_COUNT 2
+char** parse_IP(char *pkt, int *count) {
+    // Parse an IP packet for IPs
+    int i;
+    char **IPs = (char**) malloc(sizeof(char*) * IP_PKT_COUNT);
+
+    for (i = 0; i < IP_PKT_COUNT; i++) {
+        IPs[i] = (char*) malloc(sizeof(char) * 1024);
+    }
+
+    // Parse IP line for src and dest address (throw away rest)
+    if (sscanf(pkt, "%1023s > %1023[^:]s ", IPs[0], IPs[1]) != 2) {
+        fprintf(stderr, "Error parsing IP packet: ");
+        for (i = 0; i < IP_PKT_COUNT; i++) {
+            free(IPs[i]);
+        }
+        free(IPs);
+        return NULL;
+    }
+    *count = IP_PKT_COUNT;
+    return IPs;
+}
+
+char** parse_IP6(char *pkt, int *count) {
+    // Parse an IP6 packet for IPs
+    
+    // Not currently supported
+    *count = 0;
+    return NULL;
+}
 
 void handle_line(char *ln) {
     /*
@@ -51,15 +135,40 @@ void handle_line(char *ln) {
     }
     
     if (strcmp(pkt_type, "TCP") == 0) {
-        // type = TCP;
+        type = TCP;
     } else if (strcmp(pkt_type, "ARP,") == 0) {
-        // type = ARP;
+        type = ARP;
     } else if (strcmp(pkt_type, "IP") == 0) {
-        // type = IP;
+        type = IP;
+    } else if (strcmp(pkt_type, "IP6") == 0) {
+        type = IP6;
     }
-    
-    if (type == UNKNOWN) {
+
+    char **IPs;
+    int IP_count = -1;
+
+    switch(type) {
+    case TCP:
+        IPs = parse_TCP(rest, &IP_count);
+        break;
+    case ARP:
+        IPs = parse_ARP(rest, &IP_count);
+        break;
+    case IP:
+        IPs = parse_IP(rest, &IP_count);
+        break;
+    case IP6:
+        IPs = parse_IP6(rest, &IP_count);
+        break;
+    case UNKNOWN: // fall through
+    default:
         fprintf(stderr, "Unknown packet type: %s\n\t%s\n", pkt_type, ln);
+        return;
+    }
+
+    if (IP_count == -1) {
+        fprintf(stderr, "%s\n", ln);
+        return;
     }
     
 }
