@@ -24,11 +24,13 @@
 #define SOURCE_ADDRESS "192.168.1.116" // This computer's IP Address
 #define DEST_ADDRESS "192.168.1.1"
 
-// Globals to temporarily store the MAC address found in an ARP Reply message
+time_t timer;
+
 char **ip_table = NULL;
 int ip_table_size = 1;
 int ip_table_count = 0;
 
+// Globals to store the MAC address found in an ARP Reply message
 char ARP_MAC_address[1024];
 int ARP_is_reply = 0;
 
@@ -67,11 +69,17 @@ void init_ip_table() {
 }
 
 void arp_request(char *ip) {
-    if (add_ip(ip)) {
-        printf("Saw IP address: %s\n", ip);
-    } else {
+    if (!add_ip(ip)) {
         free(ip);
+        return;
     }
+    printf("Saw IP address: %s\n", ip);
+
+    // TODO: Send arp request packet
+
+    // Update current time
+    time(&timer);
+    return;
 }
 
 char** parse_TCP(char *pkt, int *count) {
@@ -167,12 +175,13 @@ void handle_line(char *ln) {
     char pkt_type[1024];
     char rest[1024];
     
-    // partially parse string
+    // partially parse the packet for timestamp and type
     if (sscanf(line, "%1023s %1023s %1023[^\n]", timestamp, pkt_type, rest) != 3) {
         fprintf(stderr, "Unable to parse string:\n%s\n", ln);
         return;
     }
     
+    // We don't care about the timestamp; get packet type
     if (strcmp(pkt_type, "TCP") == 0) {
         type = TCP;
     } else if (strcmp(pkt_type, "ARP,") == 0) {
@@ -183,9 +192,9 @@ void handle_line(char *ln) {
         type = IP6;
     }
 
+    // Parse the packet for IP Addresses
     char **IPs;
     int IP_count = -1;
-
     switch(type) {
     case TCP:
         IPs = parse_TCP(rest, &IP_count);
@@ -210,25 +219,35 @@ void handle_line(char *ln) {
         return;
     }
     
-    // filter and ARP request IP addresses
+    // filter nonlocal IP addresses and send ARP request for new addresses
     for (i = 0; i < IP_count; i++) {
         int a, b, c, d;
+
+        // Parse first four numbers
+        // This is because some packets are logged with port number,
+        // e.g. 192.168.0.1.80
         if (sscanf(IPs[i], "%d.%d.%d.%d", &a, &b, &c, &d) != 4) {
-            fprintf(stderr, "Invalid IP %s received from packet %s\n", IPs[i], ln);
+            fprintf(stderr, "Error parsing IP %s received from packet %s\n", IPs[i], ln);
+            free(IPs);
+            return;
         }
+
+        // Check to see if this address is 192.168.*.*
         if (a != 192 || b != 168) continue;
 
+        // Turn address back into string for sending an arp request
         char *ip = (char*) malloc(sizeof(char) * 1024);
         sprintf(ip, "%d.%d.%d.%d", a, b, c, d);
 
+        // Send arp request (will automatically check if address is new)
         arp_request(ip);
     }
+    // Free addresses that we are no longer using
     free(IPs);
 }
 
 int main(int argc, char **argv) {
     int i;
-    time_t timer;
     char line[1024];
 
     init_ip_table();
@@ -239,16 +258,20 @@ int main(int argc, char **argv) {
         // Read line from stdin
         gets(line);
 
+        // Quit when we reach end of file
         if (feof(stdin)) break;
         
         // Quit when 5 minutes have passed
         if (difftime(timer, time(NULL)) > 60 * 5) break;
+
+        // Reset ARP reply flag
+        ARP_is_reply = 0;
         
+        // Parse and handle line
         handle_line(line);
-        
-        // Check for new IP Addresses in stdin
-        // ...
     }
+    
+    // Free up memory (to make valgrind happy)
     for (i = 0; i < ip_table_count; i++) {
         free(ip_table[i]);
     }

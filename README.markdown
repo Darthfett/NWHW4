@@ -16,5 +16,5 @@ Parse tcpdump output for IP addresses, and send ARP requests for unrecognized lo
 
 Or, alternatively, to test with a sample dump:
 
- * `cat sample.txt | ./a.out`
+ * `./a.out < sample.txt`
 
