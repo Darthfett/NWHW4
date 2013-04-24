@@ -25,6 +25,10 @@
 #define DEST_ADDRESS "192.168.1.1"
 
 // Globals to temporarily store the MAC address found in an ARP Reply message
+char **ip_table = NULL;
+int ip_table_size = 1;
+int ip_table_count = 0;
+
 char ARP_MAC_address[1024];
 int ARP_is_reply = 0;
 
@@ -36,6 +40,40 @@ typedef enum {
     IP6,
 } packet_t;
 
+int seen_ip(char *ip) {
+    int i;
+    for (i = 0; i < ip_table_count; i++) {
+        if (strcmp(ip, ip_table[i]) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int add_ip(char *ip) {
+    if (seen_ip(ip)) return 0;
+
+    if (ip_table_count >= ip_table_size) {
+        ip_table_size = ip_table_count * 2;
+        ip_table = (char**) realloc((void*) ip_table, sizeof(char*) * ip_table_size);
+    }
+    ip_table[ip_table_count] = ip;
+    ip_table_count++;
+    return 1;
+}
+
+void init_ip_table() {
+    ip_table = (char**) malloc(sizeof(char*) * ip_table_size);
+}
+
+void arp_request(char *ip) {
+    if (add_ip(ip)) {
+        printf("Saw IP address: %s\n", ip);
+    } else {
+        free(ip);
+    }
+}
+
 char** parse_TCP(char *pkt, int *count) {
     // Don't know what these look like, just treat as error for now
     return NULL;
@@ -45,7 +83,7 @@ char** parse_TCP(char *pkt, int *count) {
 char** parse_ARP(char *pkt, int *count) {
     // Parse an ARP packet for IPs
     int i;
-    char **IPs = (char**) malloc(sizeof(char) * ARP_PKT_COUNT);
+    char **IPs = (char**) malloc(sizeof(char*) * ARP_PKT_COUNT);
 
     if (strncmp(pkt, "Request", strlen("Request")) == 0) {
         // Allocate room for 2 IPs
@@ -120,6 +158,7 @@ void handle_line(char *ln) {
         Parse the given line for IP Addresses,
         then send ARP requests for any new/unrecognized IP Addresses
     */
+    int i;
     char line[1024];
     strncpy(line, ln, 1024);
     
@@ -171,11 +210,28 @@ void handle_line(char *ln) {
         return;
     }
     
+    // filter and ARP request IP addresses
+    for (i = 0; i < IP_count; i++) {
+        int a, b, c, d;
+        if (sscanf(IPs[i], "%d.%d.%d.%d", &a, &b, &c, &d) != 4) {
+            fprintf(stderr, "Invalid IP %s received from packet %s\n", IPs[i], ln);
+        }
+        if (a != 192 || b != 168) continue;
+
+        char *ip = (char*) malloc(sizeof(char) * 1024);
+        sprintf(ip, "%d.%d.%d.%d", a, b, c, d);
+
+        arp_request(ip);
+    }
+    free(IPs);
 }
 
 int main(int argc, char **argv) {
+    int i;
     time_t timer;
     char line[1024];
+
+    init_ip_table();
     
     // Start timer
     time(&timer);
@@ -193,6 +249,10 @@ int main(int argc, char **argv) {
         // Check for new IP Addresses in stdin
         // ...
     }
+    for (i = 0; i < ip_table_count; i++) {
+        free(ip_table[i]);
+    }
+    free(ip_table);
     return 0;
 }
 /*

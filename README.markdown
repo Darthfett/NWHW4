@@ -9,7 +9,7 @@ Parse tcpdump output for IP addresses, and send ARP requests for unrecognized lo
    - `sudo apt-get install gcc`
 
 ## Compilation ##
- * `gcc -Wall main.c` (Use -Wall to enable **all W**arnings!)
+ * `gcc -Wall main.c` (Use -Wall to enable **all W**arnings)
 
 ## Running ##
  * `sudo tcpdump -nS | ./a.out`
