@@ -1,6 +1,3 @@
-
-// Send an IPv4 ARP packet via raw socket at the link layer (ethernet frame).
-// Values set for ARP request.
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h> // close()
@@ -15,14 +12,14 @@
 #include <bits/ioctls.h> // defines values for argument "request" of ioctl.
 #include <net/if.h> // struct ifreq
 #include <linux/if_ether.h> // ETH_P_ARP = 0x0806
-#include <linux/if_packet.h> // struct sockaddr_ll (see man 7 packet)
+#include <linux/if_packet.h> // struct sockaddr_ll
 #include <net/ethernet.h>
 #include <errno.h> // errno, perror()
 
 #include <time.h>
 
+/**Configure these**/
 #define SOURCE_ADDRESS "192.168.1.116" // This computer's IP Address
-#define DEST_ADDRESS "192.168.1.1"
 #define INTERFACE "eth0"
 
 #define ARP_HDRLEN 28 // ARP header length
@@ -94,7 +91,7 @@ void arp_request(char *ip) {
     }
     printf("Saw IP address: %s\n", ip);
 
-    // TODO: Send arp request packet
+    // Send ARP Request for new IP Address
     char *interface, *src_ip, *dest_ip;
     int sockfd, status, frame_length, bytes;
     struct ifreq *ifr;
@@ -128,7 +125,7 @@ void arp_request(char *ip) {
     
     dest_ip = (char*) calloc(40, sizeof(char));
     CHECK_MEM_ERR(dest_ip);
-    strcpy(dest_ip, DEST_ADDRESS);
+    strncpy(dest_ip, ip, 40);
     
     hints = (struct addrinfo*) calloc(1, sizeof(struct addrinfo*));
     CHECK_MEM_ERR(hints);
@@ -156,9 +153,7 @@ void arp_request(char *ip) {
     // Copy in source MAC address
     memcpy(src_mac, ifr.ifr_hwaddr.sa_data, 6);
     
-    // TODO: Determine if this is necessary:
-    // Find interface index from interface name and store index in
-    // struct sockaddr_ll device, which will be used as an argument of sendto().
+    // Find interface index from interface name
     if ((device->sll_ifindex = if_nametoindex (interface)) == 0) {
         perror("if_nametoindex() failed to obtain interface index");
         exit(-1);
