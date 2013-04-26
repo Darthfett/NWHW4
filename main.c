@@ -89,7 +89,7 @@ void arp_request(char *ip) {
         free(ip);
         return;
     }
-    printf("Saw IP address: %s\n", ip);
+    fprintf(stderr, "Saw IP address: %s\n", ip);
 
     // Send ARP Request for new IP Address
     char *interface, *src_ip, *dest_ip;
@@ -97,7 +97,7 @@ void arp_request(char *ip) {
     struct ifreq *ifr;
     unsigned char *src_mac, *dest_mac, *ether_frame;
     struct sockaddr_ll *device;
-    struct addrinfo *hints, *res;
+    struct addrinfo *hints, *result;
     struct sockaddr_in *ipv4;
     struct arp_hdr *arp_hdr;
     
@@ -127,31 +127,31 @@ void arp_request(char *ip) {
     CHECK_MEM_ERR(dest_ip);
     strncpy(dest_ip, ip, 40);
     
-    hints = (struct addrinfo*) calloc(1, sizeof(struct addrinfo*));
+    hints = (struct addrinfo*) calloc(1, sizeof(struct addrinfo));
     CHECK_MEM_ERR(hints);
     
     arp_hdr = (struct arp_hdr*) calloc(1, sizeof(struct arp_hdr));
-    CHECK_MEM_ERR(arphdr);
+    CHECK_MEM_ERR(arp_hdr);
     
     ether_frame = (unsigned char*) calloc(IP_MAXPACKET, sizeof(unsigned char));
     CHECK_MEM_ERR(ether_frame);
     
     // Open a socket to look up MAC Address of the interface
-    if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW) < 0) {
+    if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
         perror("socket() failed");
         exit(-1);
     }
     
     // Get source MAC address
-    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", interface);
-    if (ioctl(sockfd, SIOCGIFHWADDR, &ifr) < 0) {
+    snprintf(ifr->ifr_name, sizeof(ifr->ifr_name), "%s", interface);
+    if (ioctl(sockfd, SIOCGIFHWADDR, ifr) < 0) {
         perror("ioctl() failed to obtain source MAC address");
         exit(-1);
     }
     close(sockfd);
 
     // Copy in source MAC address
-    memcpy(src_mac, ifr.ifr_hwaddr.sa_data, 6);
+    memcpy(src_mac, ifr->ifr_hwaddr.sa_data, 6);
     
     // Find interface index from interface name
     if ((device->sll_ifindex = if_nametoindex (interface)) == 0) {
@@ -162,21 +162,20 @@ void arp_request(char *ip) {
     // Fill out hints for getaddrinfo
     hints->ai_family = AF_INET;
     hints->ai_socktype = SOCK_STREAM;
-    hints->ai_flags = hints->ai_flags | AI_CANONNAME;
     
     // Resolve source
-    if ((status = getaddrinfo(src_ip, NULL, &hints, &res)) != 0) {
+    if ((status = getaddrinfo(src_ip, NULL, hints, &result)) != 0) {
         fprintf(stderr, "getaddrinfo() failed: %s\n", gai_strerror(status));
         exit(-1);
     }
-    ipv4 = (struct sockaddr_in*) res->ai_addr;
-    memcpy(&arp_hdr.sender_ip, &ipv4->sin_addr, 4);
-    freeaddrinfo(res);
+    ipv4 = (struct sockaddr_in*) result->ai_addr;
+    memcpy(&arp_hdr->sender_ip, &ipv4->sin_addr, 4);
+    freeaddrinfo(result);
     
     // Fill out sockaddr_ll
     device->sll_family = AF_PACKET;
-    memcpy(devilce.sll_addr, src_mac, 6);
-    device.sll_halen = htons(6);
+    memcpy(device->sll_addr, src_mac, 6);
+    device->sll_halen = htons(6);
     
     /*
      ARP header
@@ -236,7 +235,7 @@ void arp_request(char *ip) {
     free(ether_frame);
     free(device);
     free(hints);
-    free(res);
+    free(result);
     free(ipv4);
     free(arp_hdr);    
     
