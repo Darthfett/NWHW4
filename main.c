@@ -25,6 +25,9 @@
 #define DEST_ADDRESS "192.168.1.1"
 #define INTERFACE "eth0"
 
+#define ARP_HDRLEN 28 // ARP header length
+#define ARPOP_REQUEST 1 // OpCode for ARP Request
+
 #define CHECK_MEM_ERR(ptr) if (ptr == NULL) {fprintf(stderr, "Fatal: Memory Allocation Error\n"); exit(-1);}
 
 time_t timer;
@@ -44,6 +47,18 @@ typedef enum {
     IP,
     IP6,
 } packet_t;
+
+struct arp_hdr {
+    unsigned short htype;
+    unsigned short ptype;
+    unsigned char hlen;
+    unsigned char plen;
+    unsigned short opcode;
+    unsigned char sender_mac[6];
+    unsigned char sender_ip[4];
+    unsigned char target_mac[6];
+    unsigned char target_ip[4];
+};
 
 int seen_ip(char *ip) {
     int i;
@@ -81,13 +96,13 @@ void arp_request(char *ip) {
 
     // TODO: Send arp request packet
     char *interface, *src_ip, *dest_ip;
-    int sockfd, status, frame_length;
+    int sockfd, status, frame_length, bytes;
     struct ifreq *ifr;
     unsigned char *src_mac, *dest_mac, *ether_frame;
     struct sockaddr_ll *device;
     struct addrinfo *hints, *res;
     struct sockaddr_in *ipv4;
-    arp_hdr *arphdr;
+    struct arp_hdr *arp_hdr;
     
     // Use calloc to automatically zero out stuff for sockets (I don't trust that stuff)
     interface = (char*) calloc(40, sizeof(char));
@@ -118,7 +133,7 @@ void arp_request(char *ip) {
     hints = (struct addrinfo*) calloc(1, sizeof(struct addrinfo*));
     CHECK_MEM_ERR(hints);
     
-    arphdr = (arp_hdr*) calloc(1, sizeof(arp_hdr));
+    arp_hdr = (struct arp_hdr*) calloc(1, sizeof(struct arp_hdr));
     CHECK_MEM_ERR(arphdr);
     
     ether_frame = (unsigned char*) calloc(IP_MAXPACKET, sizeof(unsigned char));
@@ -160,7 +175,7 @@ void arp_request(char *ip) {
         exit(-1);
     }
     ipv4 = (struct sockaddr_in*) res->ai_addr;
-    memcpy(&arphdr.sender_ip, &ipv4->sin_addr, 4);
+    memcpy(&arp_hdr.sender_ip, &ipv4->sin_addr, 4);
     freeaddrinfo(res);
     
     // Fill out sockaddr_ll
@@ -173,19 +188,19 @@ void arp_request(char *ip) {
     */
     
     // Hardware type (ethernet)
-    arphdr->htype = htons(1);
+    arp_hdr->htype = htons(1);
     // Protocol type (IP)
-    arphdr->ptype = htons(ETH_P_IP);
+    arp_hdr->ptype = htons(ETH_P_IP);
     // Hardware address length (6 bytes for MAC address)
-    arhdr->hlen = 6;
+    arp_hdr->hlen = 6;
     // Protocol address length (4 bytes for IPv4)
-    arphdr->plen = 4;
+    arp_hdr->plen = 4;
     // OpCode (1 for ARP request)
-    arphdr->opcode = htons(ARPOP_REQUEST);
+    arp_hdr->opcode = htons(ARPOP_REQUEST);
     // Sender hardware address (MAC address)
-    memcpy(&arphdr->sender_mac, src_mac, 6);
+    memcpy(&arp_hdr->sender_mac, src_mac, 6);
     // Target hardware address (0 for unknown)
-    memset(&arphdr->target_mac, 0, 6);
+    memset(&arp_hdr->target_mac, 0, 6);
     
     /*
      Ethernet frame
@@ -200,7 +215,7 @@ void arp_request(char *ip) {
     ether_frame[12] = ETH_P_ARP / 256;
     ether_frame[13] = ETH_P_ARP % 256;
     // ARP header
-    memcpy(ether_frame+14, arphdr, ARP_HDRLEN);
+    memcpy(ether_frame+14, arp_hdr, ARP_HDRLEN);
     
     /*
      Send ethernet frame
@@ -228,7 +243,7 @@ void arp_request(char *ip) {
     free(hints);
     free(res);
     free(ipv4);
-    free(arphdr);    
+    free(arp_hdr);    
     
     // Update current time
     time(&timer);
