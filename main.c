@@ -80,7 +80,156 @@ void arp_request(char *ip) {
     printf("Saw IP address: %s\n", ip);
 
     // TODO: Send arp request packet
+    char *interface, *src_ip, *dest_ip;
+    int sockfd, status, frame_length;
+    struct ifreq *ifr;
+    unsigned char *src_mac, *dest_mac, *ether_frame;
+    struct sockaddr_ll *device;
+    struct addrinfo *hints, *res;
+    struct sockaddr_in *ipv4;
+    arp_hdr *arphdr;
+    
+    // Use calloc to automatically zero out stuff for sockets (I don't trust that stuff)
+    interface = (char*) calloc(40, sizeof(char));
+    CHECK_MEM_ERR(interface);
+    strcpy(interface, INTERFACE);
+    
+    ifr = (struct ifreq*) calloc(1, sizeof(struct ifreq));
+    CHECK_MEM_ERR(ifr);
+    
+    src_mac = (unsigned char*) calloc(6, sizeof(unsigned char));
+    CHECK_MEM_ERR(src_mac);
+    
+    dest_mac = (unsigned char*) calloc(6, sizeof(unsigned char));
+    CHECK_MEM_ERR(dest_mac);
+    memset(dest_mac, 0xff, 6); // set to broadcast address
+    
+    device = (struct sockaddr_ll*) calloc(1, sizeof(struct sockaddr_ll));
+    CHECK_MEM_ERR(device);
+    
+    src_ip = (char*) calloc(16, sizeof(char));
+    CHECK_MEM_ERR(src_ip);
+    strcpy(src_ip, SOURCE_ADDRESS);
+    
+    dest_ip = (char*) calloc(40, sizeof(char));
+    CHECK_MEM_ERR(dest_ip);
+    strcpy(dest_ip, DEST_ADDRESS);
+    
+    hints = (struct addrinfo*) calloc(1, sizeof(struct addrinfo*));
+    CHECK_MEM_ERR(hints);
+    
+    arphdr = (arp_hdr*) calloc(1, sizeof(arp_hdr));
+    CHECK_MEM_ERR(arphdr);
+    
+    ether_frame = (unsigned char*) calloc(IP_MAXPACKET, sizeof(unsigned char));
+    CHECK_MEM_ERR(ether_frame);
+    
+    // Open a socket to look up MAC Address of the interface
+    if ((sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_RAW) < 0) {
+        perror("socket() failed");
+        exit(-1);
+    }
+    
+    // Get source MAC address
+    snprintf(ifr.ifr_name, sizeof(ifr.ifr_name), "%s", interface);
+    if (ioctl(sockfd, SIOCGIFHWADDR, &ifr) < 0) {
+        perror("ioctl() failed to obtain source MAC address");
+        exit(-1);
+    }
+    close(sockfd);
 
+    // Copy in source MAC address
+    memcpy(src_mac, ifr.ifr_hwaddr.sa_data, 6);
+    
+    // TODO: Determine if this is necessary:
+    // Find interface index from interface name and store index in
+    // struct sockaddr_ll device, which will be used as an argument of sendto().
+    if ((device->sll_ifindex = if_nametoindex (interface)) == 0) {
+        perror("if_nametoindex() failed to obtain interface index");
+        exit(-1);
+    }
+    
+    // Fill out hints for getaddrinfo
+    hints->ai_family = AF_INET;
+    hints->ai_socktype = SOCK_STREAM;
+    hints->ai_flags = hints->ai_flags | AI_CANONNAME;
+    
+    // Resolve source
+    if ((status = getaddrinfo(src_ip, NULL, &hints, &res)) != 0) {
+        fprintf(stderr, "getaddrinfo() failed: %s\n", gai_strerror(status));
+        exit(-1);
+    }
+    ipv4 = (struct sockaddr_in*) res->ai_addr;
+    memcpy(&arphdr.sender_ip, &ipv4->sin_addr, 4);
+    freeaddrinfo(res);
+    
+    // Fill out sockaddr_ll
+    device->sll_family = AF_PACKET;
+    memcpy(devilce.sll_addr, src_mac, 6);
+    device.sll_halen = htons(6);
+    
+    /*
+     ARP header
+    */
+    
+    // Hardware type (ethernet)
+    arphdr->htype = htons(1);
+    // Protocol type (IP)
+    arphdr->ptype = htons(ETH_P_IP);
+    // Hardware address length (6 bytes for MAC address)
+    arhdr->hlen = 6;
+    // Protocol address length (4 bytes for IPv4)
+    arphdr->plen = 4;
+    // OpCode (1 for ARP request)
+    arphdr->opcode = htons(ARPOP_REQUEST);
+    // Sender hardware address (MAC address)
+    memcpy(&arphdr->sender_mac, src_mac, 6);
+    // Target hardware address (0 for unknown)
+    memset(&arphdr->target_mac, 0, 6);
+    
+    /*
+     Ethernet frame
+    */
+    
+    // Ethernet frame header (length = MAC + MAC + ethernet_type + ethernet_data
+    frame_length = 6 + 6 + 2 + ARP_HDRLEN;
+    // Destination and source MAC addresses
+    memcpy(ether_frame, dest_mac, 6);
+    memcpy(ether_frame + 6, src_mac, 6);
+    // Ethernet type code (ETH_P_ARP for ARP)
+    ether_frame[12] = ETH_P_ARP / 256;
+    ether_frame[13] = ETH_P_ARP % 256;
+    // ARP header
+    memcpy(ether_frame+14, arphdr, ARP_HDRLEN);
+    
+    /*
+     Send ethernet frame
+    */
+    if ((sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0) {
+        perror("socket() for ethernet packet failed");
+        exit(-1);
+    }
+    if ((bytes = sendto(sockfd, ether_frame, frame_length, 0,
+            (struct sockaddr*) device, sizeof(device))) <= 0) {
+        perror("sendto() failed");
+        exit(-1);
+    }
+    
+    // Cleanup
+    close(sockfd);
+    free(interface);
+    free(src_ip);
+    free(dest_ip);
+    free(ifr);
+    free(src_mac);
+    free(dest_mac);
+    free(ether_frame);
+    free(device);
+    free(hints);
+    free(res);
+    free(ipv4);
+    free(arphdr);    
+    
     // Update current time
     time(&timer);
     return;
