@@ -23,6 +23,9 @@
 
 #define SOURCE_ADDRESS "192.168.1.116" // This computer's IP Address
 #define DEST_ADDRESS "192.168.1.1"
+#define INTERFACE "eth0"
+
+#define CHECK_MEM_ERR(ptr) if (ptr == NULL) {fprintf(stderr, "Fatal: Memory Allocation Error\n"); exit(-1);}
 
 time_t timer;
 
@@ -66,6 +69,7 @@ int add_ip(char *ip) {
 
 void init_ip_table() {
     ip_table = (char**) malloc(sizeof(char*) * ip_table_size);
+    CHECK_MEM_ERR(ip_table);
 }
 
 void arp_request(char *ip) {
@@ -92,11 +96,13 @@ char** parse_ARP(char *pkt, int *count) {
     // Parse an ARP packet for IPs
     int i;
     char **IPs = (char**) malloc(sizeof(char*) * ARP_PKT_COUNT);
+    CHECK_MEM_ERR(IPs);
 
     if (strncmp(pkt, "Request", strlen("Request")) == 0) {
         // Allocate room for 2 IPs
         for (i = 0; i < ARP_PKT_COUNT; i++) {
             IPs[i] = (char*) malloc(sizeof(char) * 1024);
+            CHECK_MEM_ERR(IPs[i]);
         }
 
         // Try and parse the IPs
@@ -114,6 +120,7 @@ char** parse_ARP(char *pkt, int *count) {
     } else if (strncmp(pkt, "Reply", strlen("Reply")) == 0) {
         // Allocate room for 1 IP
         IPs[0] = (char*) malloc(sizeof(char) * 1024);
+        CHECK_MEM_ERR(IPs);
         if (sscanf(pkt, "Reply %1023s is-at %1023[^,]s, ", IPs[0], ARP_MAC_address) != 2) {
             // Format did not match?
             fprintf(stderr, "Error parsing ARP Reply packet: ");
@@ -135,9 +142,11 @@ char** parse_IP(char *pkt, int *count) {
     // Parse an IP packet for IPs
     int i;
     char **IPs = (char**) malloc(sizeof(char*) * IP_PKT_COUNT);
+    CHECK_MEM_ERR(IPs);
 
     for (i = 0; i < IP_PKT_COUNT; i++) {
         IPs[i] = (char*) malloc(sizeof(char) * 1024);
+        CHECK_MEM_ERR(IPs[i]);
     }
 
     // Parse IP line for src and dest address (throw away rest)
@@ -237,6 +246,7 @@ void handle_line(char *ln) {
 
         // Turn address back into string for sending an arp request
         char *ip = (char*) malloc(sizeof(char) * 1024);
+        CHECK_MEM_ERR(ip);
         sprintf(ip, "%d.%d.%d.%d", a, b, c, d);
 
         // Send arp request (will automatically check if address is new)
@@ -357,7 +367,7 @@ int main (int argc, char **argv)
     }
     memset (src_ip, 0, 16 * sizeof (char));
     // Interface to send packet through.
-    strcpy (interface, "eth0");
+    strcpy (interface, INTERFACE);
     // Submit request for a socket descriptor to look up interface.
     if ((sd = socket (AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
         perror ("socket() failed to get socket descriptor for using ioctl() ");
