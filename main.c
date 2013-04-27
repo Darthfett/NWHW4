@@ -162,6 +162,7 @@ void arp_request(char *ip) {
     // Fill out hints for getaddrinfo
     hints->ai_family = AF_INET;
     hints->ai_socktype = SOCK_STREAM;
+    hints->ai_flags = hints->ai_flags | AI_CANONNAME;
     
     // Resolve source
     if ((status = getaddrinfo(src_ip, NULL, hints, &result)) != 0) {
@@ -169,9 +170,20 @@ void arp_request(char *ip) {
         exit(-1);
     }
     ipv4 = (struct sockaddr_in*) result->ai_addr;
-    memcpy(&arp_hdr->sender_ip, &ipv4->sin_addr, 4);
+    memcpy(&(arp_hdr->sender_ip), &(ipv4->sin_addr), 4);
     freeaddrinfo(result);
     
+    memset(ipv4, 0, sizeof(*ipv4));
+
+    // Resolve destination
+    if ((status = getaddrinfo(dest_ip, NULL, hints, &result)) != 0) {
+        fprintf(stderr, "getaddrinfo() failed: %s\n", gai_strerror(status));
+        exit(-1);
+    }
+    ipv4 = (struct sockaddr_in*) result->ai_addr;
+    memcpy(&(arp_hdr->target_ip), &(ipv4->sin_addr), 4);
+    freeaddrinfo(result);
+
     // Fill out sockaddr_ll
     device->sll_family = AF_PACKET;
     memcpy(device->sll_addr, src_mac, 6);
@@ -219,7 +231,7 @@ void arp_request(char *ip) {
         exit(-1);
     }
     if ((bytes = sendto(sockfd, ether_frame, frame_length, 0,
-            (struct sockaddr*) device, sizeof(device))) <= 0) {
+            (struct sockaddr*) device, sizeof(*device))) <= 0) {
         perror("sendto() failed");
         exit(-1);
     }
@@ -235,8 +247,6 @@ void arp_request(char *ip) {
     free(ether_frame);
     free(device);
     free(hints);
-    free(result);
-    free(ipv4);
     free(arp_hdr);    
     
     // Update current time
