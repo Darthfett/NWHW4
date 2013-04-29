@@ -20,7 +20,8 @@
 
 /**Configure these**/
 #define SOURCE_ADDRESS "192.168.1.116" // This computer's IP Address
-#define INTERFACE "eth0"
+#define INTERFACE "eth0" // Output device
+#define ONLY_ARP_REQ_LOCAL 1 // Only send ARP requests for IPs in 192.168.*.* range
 
 #define ARP_HDRLEN 28 // ARP header length
 #define ARPOP_REQUEST 1 // OpCode for ARP Request
@@ -73,6 +74,7 @@ int add_ip(char *ip) {
     if (ip_table_count >= ip_table_size) {
         ip_table_size = ip_table_count * 2;
         ip_table = (char**) realloc((void*) ip_table, sizeof(char*) * ip_table_size);
+        CHECK_MEM_ERR(ip_table);
     }
     ip_table[ip_table_count] = ip;
     ip_table_count++;
@@ -89,7 +91,7 @@ void arp_request(char *ip) {
         free(ip);
         return;
     }
-    fprintf(stderr, "Saw IP address: %s\n", ip);
+    printf("Sending ARP Request for: %s\n", ip);
 
     // Send ARP Request for new IP Address
     char *interface, *src_ip, *dest_ip;
@@ -410,7 +412,7 @@ void handle_line(char *ln) {
         }
 
         // Check to see if this address is 192.168.*.*
-        if (a != 192 || b != 168) continue;
+        if (ONLY_ARP_REQ_LOCAL && (a != 192 || b != 168)) continue;
 
         // Turn address back into string for sending an arp request
         char *ip = (char*) malloc(sizeof(char) * 1024);
